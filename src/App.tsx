@@ -49,6 +49,79 @@ import {
 } from "lucide-react";
 
 export default function App() {
+  // User Security Authentication State
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem("rt_net_logged_in") === "true";
+  });
+  const [securityPin, setSecurityPin] = useState<string>(() => {
+    return localStorage.getItem("rt_net_security_pin") || "admin123";
+  });
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinChangeOld, setPinChangeOld] = useState("");
+  const [pinChangeNew, setPinChangeNew] = useState("");
+  const [showPinChangeSuccess, setShowPinChangeSuccess] = useState(false);
+  const [securityLogs, setSecurityLogs] = useState<string[]>(() => {
+    const saved = localStorage.getItem("rt_net_security_logs");
+    return saved ? JSON.parse(saved) : [
+      `Sistem keamanan diaktifkan pada ${new Date().toLocaleDateString("id-ID")}`,
+      "Password keamanan default disetel ke: admin123"
+    ];
+  });
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (enteredPin === securityPin) {
+      setIsLoggedIn(true);
+      setPinError("");
+      localStorage.setItem("rt_net_logged_in", "true");
+      
+      const updatedLogs = [
+        `Login berhasil pada ${new Date().toLocaleTimeString("id-ID")} - Sesi Admin Aktif`,
+        ...securityLogs.slice(0, 10)
+      ];
+      setSecurityLogs(updatedLogs);
+      localStorage.setItem("rt_net_security_logs", JSON.stringify(updatedLogs));
+      setSuccessBanner("Selamat Datang Kembali! Otentikasi Dashboard Berhasil.");
+    } else {
+      setPinError("Password PIN salah! Silakan coba kembali.");
+      const updatedLogs = [
+        `❌ Gagal login: Percobaan dengan sandi tidak sah pada ${new Date().toLocaleTimeString("id-ID")}`,
+        ...securityLogs.slice(0, 10)
+      ];
+      setSecurityLogs(updatedLogs);
+      localStorage.setItem("rt_net_security_logs", JSON.stringify(updatedLogs));
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setEnteredPin("");
+    localStorage.setItem("rt_net_logged_in", "false");
+    setSuccessBanner("Sesi ditutup dengan aman. Dashboard terkunci.");
+  };
+
+  const handleUpdatePin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinChangeOld !== securityPin) {
+      setErrorBanner("Password PIN Lama Salah! Tidak dapat mengubah sandi.");
+      return;
+    }
+    if (pinChangeNew.length < 4) {
+      setErrorBanner("Password baru terlalu pendek! Minimal 4 karakter demi keamanan.");
+      return;
+    }
+    setSecurityPin(pinChangeNew);
+    localStorage.setItem("rt_net_security_pin", pinChangeNew);
+    setPinChangeOld("");
+    setPinChangeNew("");
+    setShowPinChangeSuccess(true);
+    setSuccessBanner("Sukses! PIN keamanan dashboard Anda berhasil diperbarui.");
+    setTimeout(() => {
+      setShowPinChangeSuccess(false);
+    }, 4000);
+  };
+
   // 1. Core Connection States (Simulated ON by default for instant trial)
   const [connection, setConnection] = useState<RouterConnection>({
     host: "103.55.22.190",
@@ -545,6 +618,95 @@ Message: "${log.message}"`;
     setSuccessBanner("Logs console dibersihkan.");
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#080c14] text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none antialiased">
+        {/* Ambient background glowing orbs */}
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="w-full max-w-md bg-gradient-to-b from-[#121825] to-[#0d121d] border border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-2xl relative z-10 hover:shadow-indigo-500/5 transition-all duration-300">
+          <div className="text-center mb-6">
+            {/* 3D-like glowing shield emblem */}
+            <div className="mx-auto w-16 h-16 bg-gradient-to-tr from-indigo-600 to-indigo-400 p-4 rounded-2xl shadow-xl shadow-indigo-950/50 flex items-center justify-center mb-4 border border-indigo-500/30">
+              <Shield className="w-8 h-8 text-white animate-pulse" />
+            </div>
+            
+            <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest font-mono">
+              Sistem Pengaman Jaringan
+            </span>
+            <h2 className="text-xl font-bold font-sans text-slate-100 tracking-tight mt-1">
+              RT/RW Net Secure Login
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+              Dashboard monitoring bandwidth dan billing keuangan terenkripsi standar lokal
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-slate-400 font-bold text-xs mb-1.5 uppercase tracking-wide font-mono">
+                Password PIN Keamanan:
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  placeholder="Masukkan password PIN"
+                  value={enteredPin}
+                  onChange={(e) => setEnteredPin(e.target.value)}
+                  className="w-full bg-[#161f31] border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-sm text-white text-center font-mono focus:outline-none focus:border-indigo-500 tracking-widest placeholder:tracking-normal placeholder:text-xs"
+                />
+              </div>
+              {pinError && (
+                <p className="text-rose-400 text-center font-bold font-mono text-[11px] mt-2 animate-bounce">
+                  ⚠ {pinError}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-indigo-600 to-indigo-400 hover:from-indigo-500 hover:to-indigo-300 text-white text-xs font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-950/40 active:scale-95 uppercase tracking-wider animate-pulse hover:animate-none"
+            >
+              Buka Kunci Dashboard
+            </button>
+          </form>
+
+          {/* Quick Info & Default Credentials indicator */}
+          <div className="mt-5 pt-4 border-t border-slate-800/60 text-center">
+            <div className="bg-[#192135]/40 border border-indigo-900/30 rounded-xl p-3 text-left">
+              <span className="text-[10px] font-bold text-indigo-400 block uppercase font-mono tracking-wider mb-1">
+                🔑 Kredensial Default:
+              </span>
+              <p className="text-[10.5px] text-slate-300 leading-relaxed">
+                Gunakan sandi default <code className="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-400 font-indigo-400 font-bold font-mono">admin123</code> untuk login percobaan. Anda dapat memperbarui PIN ini kapan pun di menu pengaturan router.
+              </p>
+            </div>
+          </div>
+
+          {/* Simulated Login Logs for high-fidelity security feedback */}
+          <div className="mt-4 pt-3 border-t border-slate-800/40">
+            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold block mb-1.5 font-mono">
+              LOG MONITOR KEAMANAN TERBARU:
+            </span>
+            <div className="bg-black/40 border border-slate-900 rounded-lg p-2.5 max-h-[105px] overflow-y-auto font-mono text-[9px] text-indigo-300 space-y-1.5 custom-scrollbar">
+              {securityLogs.map((logStr, idx) => (
+                <div key={idx} className="pb-1 border-b border-slate-950/20 last:border-0 last:pb-0">
+                  <span className="text-slate-500">▶</span> {logStr}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-slate-600 font-mono mt-8">
+          © 2026 RT-RW Net Secure Platform • Port 3000 Active
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans select-none antialiased">
       {/* 1. Global Alert Toast Banners */}
@@ -661,12 +823,22 @@ Message: "${log.message}"`;
 
           <button
             onClick={() => setShowConfig(!showConfig)}
-            className={`p-2 rounded-lg border text-slate-300 transition-colors ${
+            className={`p-2 rounded-lg border text-slate-300 transition-colors flex items-center gap-1.5 ${
               showConfig ? "bg-indigo-950 border-indigo-800" : "bg-[#151c2c] border-slate-800 hover:bg-[#1a2336]"
             }`}
-            title="Pengaturan IP Router"
+            title="Pengaturan Jaringan & Keamanan PIN"
           >
             <Settings className="w-4 h-4" />
+            <span className="text-[10px] hidden sm:inline font-mono font-bold">Opsi PIN</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg border border-rose-900 bg-rose-950/30 text-rose-400 hover:bg-rose-900/40 hover:text-white transition-colors flex items-center gap-1.5"
+            title="Kunci Panel (Logout Keamanan)"
+          >
+            <Power className="w-4 h-4" />
+            <span className="text-[10px] hidden sm:inline font-mono font-bold text-rose-300">Lock</span>
           </button>
         </div>
       </header>
@@ -790,6 +962,92 @@ Message: "${log.message}"`;
               </div>
             </div>
           </form>
+
+          {/* Pemisah Keamanan Antarmuka */}
+          <div className="border-t border-slate-805/80 border-dashed my-4"></div>
+
+          {/* Form Manajemen Keamanan PIN & Log Keamanan RT/RW Net */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Sisi Kiri: Form Perbarui PIN (Symmetric Lock) */}
+            <div className="md:col-span-6 bg-gradient-to-b from-[#111623] to-[#0c0f1b] border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-2">
+                  <Shield className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  Manajemen Kredensial & Ganti PIN Keamanan
+                </h4>
+                <p className="text-[11px] text-slate-400 mb-3.5 leading-relaxed">
+                  Batasi akses orang tidak sah pada dashboard monitoring. PIN ini mengamankan seluruh fungsi MikroTik, simple queue, dan tagihan billing.
+                </p>
+
+                <form onSubmit={handleUpdatePin} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-slate-400 font-mono uppercase mb-1 font-bold">
+                        PIN Sandi Lama:
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={pinChangeOld}
+                        onChange={(e) => setPinChangeOld(e.target.value)}
+                        placeholder="PIN lama Anda"
+                        className="w-full bg-[#151c2c] border border-slate-700 rounded p-2 text-xs text-center font-mono text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-slate-400 font-mono uppercase mb-1 font-bold">
+                        PIN Sandi Baru:
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={pinChangeNew}
+                        onChange={(e) => setPinChangeNew(e.target.value)}
+                        placeholder="Min 4 karakter"
+                        className="w-full bg-[#151c2c] border border-slate-700 rounded p-2 text-xs text-center font-mono text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-1.5 px-4 rounded transition-colors shadow-lg shadow-emerald-950/40"
+                    >
+                      Terapkan PIN Baru
+                    </button>
+                  </div>
+                </form>
+
+                {showPinChangeSuccess && (
+                  <div className="mt-2 bg-emerald-950/40 border border-emerald-900 text-emerald-300 p-2 rounded text-[11px] font-semibold text-center font-mono animate-pulse">
+                    ✓ PIN Keamanan Dashboard Berhasil Diperbarui!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sisi Kanan: Log Riwayat Akses Sistem Keamanan */}
+            <div className="md:col-span-6 bg-gradient-to-b from-[#111623] to-[#0c0f1b] border border-slate-850 p-4 rounded-xl flex flex-col justify-between">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5 mb-2">
+                  <Terminal className="w-4 h-4 text-indigo-400" />
+                  Audit Keamanan & Log Percobaan Akses
+                </h4>
+                <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                  Pantau siapapun yang mencoba membuka panel. Membantu mengidentifikasi brute-force demi mengamankan MikroTik Anda.
+                </p>
+
+                <div className="bg-black/30 border border-slate-900 rounded p-2.5 text-[9.5px] font-mono text-indigo-300 space-y-1.5 max-h-[110px] overflow-y-auto scrollbar-thin">
+                  {securityLogs.map((log, idx) => (
+                    <div key={idx} className="pb-1 border-b border-slate-900/40 last:border-0 last:pb-0">
+                      <span className="text-slate-500">•</span> {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
