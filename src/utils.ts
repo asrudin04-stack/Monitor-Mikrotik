@@ -1,4 +1,4 @@
-import { NetworkInterface, DhcpLease, LogEntry, NatRule, RouterResource } from "./types";
+import { NetworkInterface, DhcpLease, LogEntry, NatRule, RouterResource, WifiBillingUser, FinanceSummary, MonthlyFinancialRecord } from "./types";
 
 // Format bits-per-second to Mbps, Kbps, or Gbps
 export function formatBandwidth(bps: number): string {
@@ -10,6 +10,17 @@ export function formatBandwidth(bps: number): string {
   const gbps = mbps / 1000;
   return `${gbps.toFixed(1)} Gbps`;
 }
+
+// Format IDR currency
+export function formatRupiah(amount: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
 
 // Format byte sizes to readable string MB, GB, etc.
 export function formatBytes(bytes: number): string {
@@ -207,3 +218,102 @@ export function addNewSimulatedLog(logs: LogEntry[]): LogEntry[] {
   // Keep max 15 logs
   return [newLog, ...logs].slice(0, 15);
 }
+
+export const INITIAL_BILLING_USERS: WifiBillingUser[] = [
+  {
+    id: "bill-1",
+    clientName: "Bpk. Aris Widodo",
+    addressNum: "Perum Blok C-12",
+    packageName: "Hotspot Ultra 20 Mbps",
+    bandwidthLimit: "20M/20M",
+    price: 250000,
+    dueDate: "2026-06-15",
+    status: "Lunas",
+    uptimeSeconds: 154820,
+    phone: "0812-3456-7890",
+    macAddress: "FC:FB:FB:12:34:56"
+  },
+  {
+    id: "bill-2",
+    clientName: "Warnet Jaya Mandiri (Roni)",
+    addressNum: "Ruko Jl. Ahmad Yani No. 15",
+    packageName: "Dedicated Bisnis 50 Mbps",
+    bandwidthLimit: "50M/50M",
+    price: 850000,
+    dueDate: "2026-06-08",
+    status: "Isolasi",
+    uptimeSeconds: 0,
+    phone: "0819-3221-5544",
+    macAddress: "00:15:5D:12:AF:02"
+  },
+  {
+    id: "bill-4",
+    clientName: "Ibu Siti Rahayu (Kost Kamar 03)",
+    addressNum: "Kost Harmoni Kamar 03",
+    packageName: "Wifi Kos Standar 10 Mbps",
+    bandwidthLimit: "10M/10M",
+    price: 150000,
+    dueDate: "2026-06-12",
+    status: "Pending",
+    uptimeSeconds: 84920,
+    phone: "0857-4433-2211",
+    macAddress: "D4:AD:FC:88:99:99"
+  },
+  {
+    id: "bill-5",
+    clientName: "Cafe Kopi Toebroek",
+    addressNum: "Jl. Veteran No. 8",
+    packageName: "Sponsor Hotspot Bisnis 30 Mbps",
+    bandwidthLimit: "30M/30M",
+    price: 450000,
+    dueDate: "2026-06-25",
+    status: "Lunas",
+    uptimeSeconds: 251900,
+    phone: "0821-9988-7766",
+    macAddress: "E4:F2:1D:C4:B8:33"
+  },
+  {
+    id: "bill-6",
+    clientName: "Bpk. Heru Sasongko",
+    addressNum: "Perum Blok A-02",
+    packageName: "Home Lite 5 Mbps",
+    bandwidthLimit: "5M/5M",
+    price: 950000,
+    dueDate: "2026-06-05",
+    status: "Jatuh Tempo",
+    uptimeSeconds: 15920,
+    phone: "0813-2244-6688",
+    macAddress: "80:2A:A8:11:00:2B"
+  },
+  {
+    id: "bill-7",
+    clientName: "Kost Putri Melati (Kost Kamar A)",
+    addressNum: "Kost Melati Room A",
+    packageName: "Wifi Kos Standar 10 Mbps",
+    bandwidthLimit: "10M/10M",
+    price: 150000,
+    dueDate: "2026-06-18",
+    status: "Pending",
+    uptimeSeconds: 312000,
+    phone: "0896-1234-5678",
+    macAddress: "CC:3A:4C:5E:6F:70"
+  }
+];
+
+export const INITIAL_FINANCE_SUMMARY: FinanceSummary = {
+  incomeThisMonth: 1800000, // Rp 1.800.000 from paid users
+  expenseThisMonth: 450000,  // Rp 450.000 (ISP fiber fee + electricity)
+  pendingReceivables: 1150000, // Rp 1.150.000 (Siti, Warnet Jaya, Heru)
+  activeSubscriberCount: 6,
+  hotspotVouchersSoldCount: 312, // Rp 5.000 or Rp 2.000 hotspot passes
+};
+
+export const INITIAL_FINANCE_RECORDS: MonthlyFinancialRecord[] = [
+  { month: "Januari", salesVouchers: 852000, salesFixedSubs: 1350000, operationalExpense: 450000 },
+  { month: "Februari", salesVouchers: 914000, salesFixedSubs: 1500000, operationalExpense: 450000 },
+  { month: "Maret", salesVouchers: 1120000, salesFixedSubs: 1650000, operationalExpense: 480000 },
+  { month: "April", salesVouchers: 1040000, salesFixedSubs: 1650000, operationalExpense: 450000 },
+  { month: "Mei", salesVouchers: 1250000, salesFixedSubs: 1800000, operationalExpense: 450000 },
+  { month: "Juni (Berjalan)", salesVouchers: 780000, salesFixedSubs: 1800000, operationalExpense: 450000 },
+];
+

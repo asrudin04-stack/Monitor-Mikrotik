@@ -4,11 +4,14 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { RouterConnection, RouterResource, NetworkInterface, DhcpLease, LogEntry, NatRule } from "./types";
+import { RouterConnection, RouterResource, NetworkInterface, DhcpLease, LogEntry, NatRule, WifiBillingUser, MonthlyFinancialRecord, FinanceSummary } from "./types";
 import {
   INITIAL_INTERFACES,
   INITIAL_CLIENTS,
   INITIAL_LOGS,
+  INITIAL_BILLING_USERS,
+  INITIAL_FINANCE_SUMMARY,
+  INITIAL_FINANCE_RECORDS,
   updateSimulatedResources,
   updateSimulatedInterfaces,
   addNewSimulatedLog,
@@ -19,6 +22,7 @@ import { ClientManager } from "./components/ClientManager";
 import { InterfaceGrid } from "./components/InterfaceGrid";
 import { LogViewer } from "./components/LogViewer";
 import { AIAssistant } from "./components/AIAssistant";
+import { WifiBillingDashboard } from "./components/WifiBillingDashboard";
 import {
   Activity,
   Cpu,
@@ -61,7 +65,127 @@ export default function App() {
     message: string;
   } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "firewall" | "setup">("dashboard");
+  const [activeTab, setActiveTab] = useState<"traffic" | "billing">("traffic");
+
+  // 6. WiFi Tagihan & Laporan Keuangan States
+  const [billingUsers, setBillingUsers] = useState<WifiBillingUser[]>(INITIAL_BILLING_USERS);
+  const [financeRecords, setFinanceRecords] = useState<MonthlyFinancialRecord[]>(INITIAL_FINANCE_RECORDS);
+  const [financeSummary, setFinanceSummary] = useState<FinanceSummary>(INITIAL_FINANCE_SUMMARY);
+
+  const handlePayBill = (userId: string) => {
+    setBillingUsers((prevUsers) => {
+      const target = prevUsers.find((u) => u.id === userId);
+      if (!target) return prevUsers;
+
+      // Update financial counters
+      setFinanceSummary((prevSum) => ({
+        ...prevSum,
+        incomeThisMonth: prevSum.incomeThisMonth + target.price,
+        pendingReceivables: Math.max(0, prevSum.pendingReceivables - target.price),
+      }));
+
+      // Append transaction details into live diagnostic logs
+      const now = new Date();
+      const timeStr = now.toTimeString().split(" ")[0];
+      const newLog: LogEntry = {
+        id: `bill-pay-${Date.now()}`,
+        time: timeStr,
+        topics: "hotspot,account,info",
+        message: `Pembayaran lunas terkonfirmasi: ${target.clientName} (${target.addressNum}) untuk paket ${target.packageName} sebesar Rp ${target.price.toLocaleString("id-ID")}`,
+        severity: "info",
+      };
+      setLogs((oldLogs) => [newLog, ...oldLogs]);
+      setSuccessBanner(`Tagihan ${target.clientName} berhasil dilunasi via Kas Masuk.`);
+
+      return prevUsers.map((u) => (u.id === userId ? { ...u, status: "Lunas" as const } : u));
+    });
+  };
+
+  const handleIsolateUser = (userId: string) => {
+    setBillingUsers((prevUsers) => {
+      const target = prevUsers.find((u) => u.id === userId);
+      if (!target) return prevUsers;
+
+      // Append filter drop rule simulation in MikroTik logging
+      const now = new Date();
+      const timeStr = now.toTimeString().split(" ")[0];
+      const newLog: LogEntry = {
+        id: `bill-block-${Date.now()}`,
+        time: timeStr,
+        topics: "firewall,warning",
+        message: `Akses Diisolasi: Dropping forward traffic dari MAC ${target.macAddress} (Pelanggan ${target.clientName} - ${target.addressNum}) karena menunggak tagihan`,
+        severity: "warning",
+      };
+      setLogs((oldLogs) => [newLog, ...oldLogs]);
+      setErrorBanner(`Akses internet ${target.clientName} telah DIISOLASI di Router MikroTik.`);
+
+      return prevUsers.map((u) => (u.id === userId ? { ...u, status: "Isolasi" as const } : u));
+    });
+  };
+
+  const handleRestoreUser = (userId: string) => {
+    setBillingUsers((prevUsers) => {
+      const target = prevUsers.find((u) => u.id === userId);
+      if (!target) return prevUsers;
+
+      // Append filter allowed rule simulation in MikroTik logging
+      const now = new Date();
+      const timeStr = now.toTimeString().split(" ")[0];
+      const newLog: LogEntry = {
+        id: `bill-unblock-${Date.now()}`,
+        time: timeStr,
+        topics: "firewall,info",
+        message: `Isolasi Dibuka: Melepas filter traffic untuk MAC ${target.macAddress} (Pelanggan ${target.clientName} - ${target.addressNum})`,
+        severity: "info",
+      };
+      setLogs((oldLogs) => [newLog, ...oldLogs]);
+      setSuccessBanner(`Akses internet ${target.clientName} dipulihkan.`);
+
+      return prevUsers.map((u) => (u.id === userId ? { ...u, status: "Pending" as const } : u));
+    });
+  };
+
+  const handleAddBillingUser = (newUser: Partial<WifiBillingUser>) => {
+    const fullUser: WifiBillingUser = {
+      id: newUser.id || `bill-user-${Date.now()}`,
+      clientName: newUser.clientName || "Pelanggan Baru",
+      addressNum: newUser.addressNum || "Blok C-",
+      packageName: newUser.packageName || "Hotspot Ultra 10 Mbps",
+      bandwidthLimit: newUser.bandwidthLimit || "10M/10M",
+      price: newUser.price || 150000,
+      dueDate: newUser.dueDate || "2026-06-15",
+      status: newUser.status as any || "Pending",
+      uptimeSeconds: 0,
+      phone: newUser.phone || "0812-",
+      macAddress: newUser.macAddress || "FC:00:FF:AA:BB:CC"
+    };
+
+    setBillingUsers((prev) => [fullUser, ...prev]);
+
+    // Log addition to MikroTik CLI log interface
+    const now = new Date();
+    const timeStr = now.toTimeString().split(" ")[0];
+    setLogs((oldLogs) => [
+      {
+        id: `bill-add-${Date.now()}`,
+        time: timeStr,
+        topics: "hotspot,info",
+        message: `Membuat kontrak langganan baru: ${fullUser.clientName} (${fullUser.packageName}) limit @ ${fullUser.bandwidthLimit}`,
+        severity: "info",
+      },
+      ...oldLogs,
+    ]);
+
+    setSuccessBanner(`Berhasil mendaftarkan pelanggan baru: ${fullUser.clientName}.`);
+  };
+
+  const handleAskAIAuditing = (prompt: string) => {
+    setRemoteAIQuery({
+      text: prompt,
+      timestamp: Date.now()
+    });
+    setSuccessBanner("Permintaan audit keuangan dikirim ke Asisten AI!");
+  };
 
   // 2. MikroTik Router Diagnostics States
   const [resources, setResources] = useState<RouterResource>({
@@ -190,7 +314,10 @@ export default function App() {
       });
 
       if (!resRaw.ok) {
-        throw new Error(`HTTP Error ${resRaw.status}: Gagal menarik data resources. Router offline atau password salah.`);
+        setErrorBanner(`Koneksi Router Asli gagal (HTTP ${resRaw.status}). Mengembalikan ke Mode Simulasi otomatis.`);
+        setConnection((c) => ({ ...c, isSimulated: true }));
+        setIsQueryingRealRouter(false);
+        return;
       }
 
       const resJson = await resRaw.json();
@@ -289,8 +416,8 @@ export default function App() {
       setLatencyMs(8);
       setErrorBanner(null);
     } catch (err: any) {
-      console.error(err);
-      setErrorBanner(`Koneksi Router Asli gagal: ${err.message || "Timeout"}. Mengembalikan ke Mode Simulasi otomatis.`);
+      console.warn("Mikrotik query error: ", err);
+      setErrorBanner(`Koneksi Router Asli gagal. Mengembalikan ke Mode Simulasi otomatis.`);
       setConnection((c) => ({ ...c, isSimulated: true }));
     } finally {
       setIsQueryingRealRouter(false);
@@ -462,6 +589,38 @@ Message: "${log.message}"`;
               Sistem manajemen bandwidth terintegrasi AI Consultant
             </p>
           </div>
+        </div>
+
+        {/* Dynamic App Tab switcher: Traffic vs Invoicing */}
+        <div className="flex bg-[#121824] border border-slate-800 p-0.5 rounded-xl font-sans text-xs">
+          <button
+            onClick={() => {
+              setActiveTab("traffic");
+              setSuccessBanner("Menampilkan status bandwidth real-time.");
+            }}
+            className={`px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === "traffic"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-950/50"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Traffic & DHCP Monitor
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("billing");
+              setSuccessBanner("Membuka monitor invoice & pembukuan keuangan WiFi (3D).");
+            }}
+            className={`px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === "billing"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-950/50 bg-gradient-to-r"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400 text-transparent bg-clip-text" />
+            WiFi Billing & Keuangan
+          </button>
         </div>
 
         {/* Network quick dials */}
@@ -640,118 +799,133 @@ Message: "${log.message}"`;
         {/* Left Side: Monitor Dashboards (8 cols) */}
         <section className="lg:col-span-8 flex flex-col gap-4 min-h-0">
           
-          {/* Quick Bento Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
-            {/* 1. System Latency */}
-            <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                <Globe className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Ping Latency</span>
-                <span className="text-base font-extrabold text-white font-mono">
-                  {latencyMs ? `${latencyMs} ms` : "Timeout"}
-                </span>
-              </div>
-            </div>
+          {activeTab === "traffic" ? (
+            <>
+              {/* Quick Bento Stats Bar */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
+                {/* 1. System Latency */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+                    <Globe className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Ping Latency</span>
+                    <span className="text-base font-extrabold text-white font-mono">
+                      {latencyMs ? `${latencyMs} ms` : "Timeout"}
+                    </span>
+                  </div>
+                </div>
 
-            {/* 2. CPU usage */}
-            <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                <Cpu className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">CPU Usage ({resources.cpuCount} Core)</span>
-                <span className="text-base font-extrabold text-[#10b981] font-mono">
-                  {resources.cpuLoad}%
-                </span>
-                {/* Minibar */}
-                <div className="w-full bg-slate-900 h-1 rounded overflow-hidden mt-1">
-                  <div
-                    className={`h-full rounded ${resources.cpuLoad > 80 ? "bg-rose-500" : "bg-emerald-500"}`}
-                    style={{ width: `${resources.cpuLoad}%` }}
-                  ></div>
+                {/* 2. CPU usage */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">CPU Usage ({resources.cpuCount} Core)</span>
+                    <span className="text-base font-extrabold text-[#10b981] font-mono">
+                      {resources.cpuLoad}%
+                    </span>
+                    {/* Minibar */}
+                    <div className="w-full bg-slate-900 h-1 rounded overflow-hidden mt-1">
+                      <div
+                        className={`h-full rounded ${resources.cpuLoad > 80 ? "bg-rose-500" : "bg-emerald-500"}`}
+                        style={{ width: `${resources.cpuLoad}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. RAM usage */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">RAM Free</span>
+                    <span className="text-base font-extrabold text-cyan-400 font-mono">
+                      {formatBytes(resources.freeMemory)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-mono block">
+                      Total: {formatBytes(resources.totalMemory)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Router Specs */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-[#8px] rounded-lg bg-amber-500/10 text-amber-400">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Board & OS</span>
+                    <span className="text-xs font-extrabold text-amber-400 font-mono block truncate" title={resources.boardName}>
+                      {resources.boardName}
+                    </span>
+                    <span className="text-[9px] text-slate-400 block font-mono truncate">
+                      OS: {resources.version}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. Uptime statistics */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
+                  <div className="p-2 rounded-lg bg-fuchsia-500/10 text-fuchsia-400">
+                    <Clock className="w-5 h-5 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Router Uptime</span>
+                    <span className="text-xs font-bold text-fuchsia-300 font-mono block leading-none pt-0.5" title={resources.uptime}>
+                      {resources.uptime}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* 3. RAM usage */}
-            <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-                <Database className="w-5 h-5" />
+              {/* Traffic bandwidth Chart Area */}
+              <div className="shrink-0">
+                <NetworkChart history={bandwidthHistory} maxSpeed={100 * 1000000} />
               </div>
-              <div className="flex-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">RAM Free</span>
-                <span className="text-base font-extrabold text-cyan-400 font-mono">
-                  {formatBytes(resources.freeMemory)}
-                </span>
-                <span className="text-[9px] text-slate-500 font-mono block">
-                  Total: {formatBytes(resources.totalMemory)}
-                </span>
+
+              {/* Split Content: Leases on left, Ports list on right */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 overflow-y-auto">
+                {/* Leases clients table (column span 8) */}
+                <div className="xl:col-span-7">
+                  <ClientManager
+                    clients={clients}
+                    onToggleBlock={handleToggleBlockClient}
+                    onUpdateLimit={handleUpdateLimitClient}
+                    onAskAIAboutClient={askAIAboutClient}
+                  />
+                </div>
+
+                {/* Interfaces status LED grid (column span 5) */}
+                <div className="xl:col-span-5">
+                  <InterfaceGrid interfaces={interfaces} />
+                </div>
               </div>
-            </div>
 
-            {/* 4. Router Specs */}
-            <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
-                <Layers className="w-5 h-5" />
+              {/* System logs view */}
+              <div className="shrink-0 mt-2">
+                <LogViewer
+                  logs={logs}
+                  onClearLogs={handleClearLogs}
+                  onAnalyzeWithAI={askAIAboutLog}
+                />
               </div>
-              <div className="min-w-0">
-                <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Board & OS</span>
-                <span className="text-xs font-extrabold text-amber-400 font-mono block truncate" title={resources.boardName}>
-                  {resources.boardName}
-                </span>
-                <span className="text-[9px] text-slate-400 block font-mono truncate">
-                  OS: {resources.version}
-                </span>
-              </div>
-            </div>
-
-            {/* 5. Uptime statistics */}
-            <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
-              <div className="p-2 rounded-lg bg-fuchsia-500/10 text-fuchsia-400">
-                <Clock className="w-5 h-5 animate-spin-slow" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-bold font-mono block">Router Uptime</span>
-                <span className="text-xs font-bold text-fuchsia-300 font-mono block leading-none pt-0.5" title={resources.uptime}>
-                  {resources.uptime}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Traffic bandwidth Chart Area */}
-          <div className="shrink-0">
-            <NetworkChart history={bandwidthHistory} maxSpeed={100 * 1000000} />
-          </div>
-
-          {/* Split Content: Leases on left, Ports list on right */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 overflow-y-auto">
-            {/* Leases clients table (column span 8) */}
-            <div className="xl:col-span-7">
-              <ClientManager
-                clients={clients}
-                onToggleBlock={handleToggleBlockClient}
-                onUpdateLimit={handleUpdateLimitClient}
-                onAskAIAboutClient={askAIAboutClient}
-              />
-            </div>
-
-            {/* Interfaces status LED grid (column span 5) */}
-            <div className="xl:col-span-5">
-              <InterfaceGrid interfaces={interfaces} />
-            </div>
-          </div>
-
-          {/* System logs view */}
-          <div className="shrink-0 mt-2">
-            <LogViewer
-              logs={logs}
-              onClearLogs={handleClearLogs}
-              onAnalyzeWithAI={askAIAboutLog}
+            </>
+          ) : (
+            <WifiBillingDashboard
+              users={billingUsers}
+              financeRecords={financeRecords}
+              financeSummary={financeSummary}
+              onPayBill={handlePayBill}
+              onIsolateUser={handleIsolateUser}
+              onRestoreUser={handleRestoreUser}
+              onAddUser={handleAddBillingUser}
+              onAskAIAuditing={handleAskAIAuditing}
             />
-          </div>
+          )}
 
         </section>
 
