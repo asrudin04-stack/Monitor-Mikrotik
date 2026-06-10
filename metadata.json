@@ -1,0 +1,6 @@
+{
+  "name": "Mikrotik Network Dashboard",
+  "description": "Dashboard monitoring jaringan MikroTik cerdas real-time dengan integrasi API RouterOS, monitoring bandwidth, status perangkat, dan asisten AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
